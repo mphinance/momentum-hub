@@ -1,318 +1,331 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronUp, ChevronDown, Plus, Share2, RefreshCw } from 'lucide-react';
-import { Stock, SortField, SortDirection, WatchlistTag } from '../types/Stock';
-import { mockTags } from '../utils/mockData';
-import { stockDataService } from '../utils/stockDataService';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Stock } from '../types/Stock';
 import WatchlistRow from './WatchlistRow';
+import {
+  getFirestore,
+  collection,
+  query,
+  onSnapshot,
+  deleteDoc,
+  doc,
+  writeBatch,
+} from 'firebase/firestore';
+import { getAuth, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 import AddStockModal from './AddStockModal';
 import ShareModal from './ShareModal';
 import TagFilter from './TagFilter';
+import { debounce } from 'lodash';
+import { formatCurrency } from '../utils/formatters';
 
-export default function Watchlist() {
+// Declare Firebase and Auth globals
+declare const __app_id: string;
+declare const __firebase_config: string;
+declare const __initial_auth_token: string;
+
+const Watchlist: React.FC = () => {
   const [stocks, setStocks] = useState<Stock[]>([]);
-  const [tags] = useState<WatchlistTag[]>(mockTags);
-  const [sortField, setSortField] = useState<SortField>('symbol');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [selectedTagFilters, setSelectedTagFilters] = useState<string[]>([]);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [db, setDb] = useState<any>(null);
+  const [auth, setAuth] = useState<any>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedStockIds, setSelectedStockIds] = useState<string[]>([]);
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // Load watchlist from localStorage on component mount
+  // Initialize Firebase and Auth
   useEffect(() => {
-    const savedWatchlist = localStorage.getItem('mphinance_watchlist');
-    if (savedWatchlist) {
-      try {
-        const parsedStocks = JSON.parse(savedWatchlist);
-        setStocks(parsedStocks);
-        // Refresh data for existing stocks
-        refreshAllStocks(parsedStocks);
-      } catch (error) {
-        console.error('Error loading saved watchlist:', error);
-      }
+    try {
+      const firebaseConfig = JSON.parse(__firebase_config);
+      const app = initializeApp(firebaseConfig);
+      const firestoreDb = getFirestore(app);
+      const firebaseAuth = getAuth(app);
+      setDb(firestoreDb);
+      setAuth(firebaseAuth);
+
+      // Sign in with custom token or anonymously
+      const signIn = async () => {
+        try {
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(firebaseAuth, __initial_auth_token);
+          } else {
+            await signInAnonymously(firebaseAuth);
+          }
+        } catch (e: any) {
+          console.error('Firebase authentication error:', e);
+          setError(`Authentication failed: ${e.message}`);
+        } finally {
+          setIsAuthReady(true);
+        }
+      };
+      signIn();
+
+      // Listen for auth state changes
+      const unsubscribeAuth = onAuthStateChanged(firebaseAuth, (user) => {
+        if (user) {
+          setUserId(user.uid);
+        } else {
+          setUserId(crypto.randomUUID()); // Use a random ID if not authenticated
+        }
+      });
+
+      return () => unsubscribeAuth();
+    } catch (e: any) {
+      console.error('Firebase initialization error:', e);
+      setError(`Firebase initialization failed: ${e.message}`);
+      setLoading(false);
     }
   }, []);
 
-  // Save watchlist to localStorage whenever stocks change
+  // Fetch stocks from Firestore
   useEffect(() => {
-    localStorage.setItem('mphinance_watchlist', JSON.stringify(stocks));
-  }, [stocks]);
+    if (!db || !userId || !isAuthReady) {
+      return;
+    }
 
-  // Auto-refresh every 5 minutes during market hours
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (stocks.length > 0) {
-        refreshAllStocks(stocks);
+    setLoading(true);
+    setError(null);
+
+    const stocksCollectionRef = collection(
+      db,
+      `artifacts/${__app_id}/users/${userId}/watchlist`
+    );
+    const q = query(stocksCollectionRef);
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const fetchedStocks: Stock[] = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Stock[];
+        setStocks(fetchedStocks);
+        setLoading(false);
+      },
+      (e) => {
+        console.error('Error fetching stocks:', e);
+        setError(`Failed to load stocks: ${e.message}`);
+        setLoading(false);
       }
-    }, 5 * 60 * 1000); // 5 minutes
+    );
 
-    return () => clearInterval(interval);
-  }, [stocks]);
+    return () => unsubscribe();
+  }, [db, userId, isAuthReady]);
 
-  const refreshAllStocks = async (stocksToRefresh: Stock[] = stocks) => {
-    if (stocksToRefresh.length === 0) return;
-    
-    setIsRefreshing(true);
-    try {
-      const symbols = stocksToRefresh.map(stock => stock.symbol);
-      const updatedData = await stockDataService.getMultipleStocksData(symbols);
-      
-      setStocks(prevStocks => 
-        prevStocks.map(stock => {
-          const newData = updatedData[stock.symbol];
-          if (newData) {
-            return {
-              ...stock,
-              price: newData.price || stock.price,
-              change: newData.change || stock.change,
-              changePercent: newData.changePercent || stock.changePercent,
-              volume: newData.volume || stock.volume,
-              high: newData.high || stock.high,
-              low: newData.low || stock.low,
-              preMarketPrice: newData.preMarketPrice,
-              preMarketChange: newData.preMarketChange,
-              preMarketChangePercent: newData.preMarketChangePercent
-            };
-          }
-          return stock;
-        })
-      );
-      
-      setLastRefresh(new Date());
-    } catch (error) {
-      console.error('Error refreshing stock data:', error);
-    } finally {
-      setIsRefreshing(false);
-    }
+  // Debounced search term update
+  const debouncedSetSearchTerm = useCallback(
+    debounce((value: string) => {
+      setSearchTerm(value);
+    }, 300),
+    []
+  );
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    debouncedSetSearchTerm(e.target.value);
   };
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
+  const handleTagChange = (tags: string[]) => {
+    setSelectedTags(tags);
   };
 
-  const filteredStocks = selectedTagFilters.length === 0 
-    ? stocks 
-    : stocks.filter(stock => 
-        selectedTagFilters.some(tag => stock.tags.includes(tag))
-      );
-
-  const sortedStocks = [...filteredStocks].sort((a, b) => {
-    const aValue = a[sortField];
-    const bValue = b[sortField];
-    
-    if (typeof aValue === 'string' && typeof bValue === 'string') {
-      return sortDirection === 'asc' 
-        ? aValue.localeCompare(bValue)
-        : bValue.localeCompare(aValue);
-    }
-    
-    if (typeof aValue === 'number' && typeof bValue === 'number') {
-      return sortDirection === 'asc' 
-        ? aValue - bValue
-        : bValue - aValue;
-    }
-    
-    return 0;
+  const filteredStocks = stocks.filter((stock) => {
+    const matchesSearch = stock.symbol
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase()) ||
+      stock.companyName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesTags =
+      selectedTags.length === 0 ||
+      selectedTags.every((tag) => stock.tags?.includes(tag));
+    return matchesSearch && matchesTags;
   });
 
-  const handleUpdateNotes = (id: string, notes: string) => {
-    setStocks(prev => prev.map(stock => 
-      stock.id === id ? { ...stock, notes } : stock
-    ));
+  const allTags = Array.from(new Set(stocks.flatMap((stock) => stock.tags || [])));
+
+  const handleDeleteStock = async (id: string) => {
+    if (!db || !userId) return;
+    try {
+      await deleteDoc(doc(db, `artifacts/${__app_id}/users/${userId}/watchlist`, id));
+      setSelectedStockIds(prev => prev.filter(stockId => stockId !== id)); // Deselect if deleted individually
+    } catch (e: any) {
+      console.error('Error deleting stock:', e);
+      setError(`Failed to delete stock: ${e.message}`);
+    }
   };
 
-  const handleUpdateTags = (id: string, newTags: string[]) => {
-    setStocks(prev => prev.map(stock => 
-      stock.id === id ? { ...stock, tags: newTags } : stock
-    ));
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedStockIds(filteredStocks.map(stock => stock.id));
+    } else {
+      setSelectedStockIds([]);
+    }
   };
 
-  const handleAddStock = (newStock: Stock) => {
-    setStocks(prev => [...prev, newStock]);
-  };
-
-  const handleRemoveStock = (id: string) => {
-    setStocks(prev => prev.filter(stock => stock.id !== id));
-  };
-
-  const handleTagToggle = (tagName: string) => {
-    setSelectedTagFilters(prev => 
-      prev.includes(tagName) 
-        ? prev.filter(t => t !== tagName)
-        : [...prev, tagName]
+  const handleRowSelect = (id: string, isSelected: boolean) => {
+    setSelectedStockIds(prev =>
+      isSelected ? [...prev, id] : prev.filter(stockId => stockId !== id)
     );
   };
 
-  const handleClearAllFilters = () => {
-    setSelectedTagFilters([]);
+  const handleMassDelete = async () => {
+    if (!db || !userId || selectedStockIds.length === 0) return;
+
+    if (window.confirm(`Are you sure you want to delete ${selectedStockIds.length} selected stocks?`)) {
+      try {
+        const batch = writeBatch(db);
+        selectedStockIds.forEach(id => {
+          const docRef = doc(db, `artifacts/${__app_id}/users/${userId}/watchlist`, id);
+          batch.delete(docRef);
+        });
+        await batch.commit();
+        setSelectedStockIds([]); // Clear selection after deletion
+      } catch (e: any) {
+        console.error('Error mass deleting stocks:', e);
+        setError(`Failed to mass delete stocks: ${e.message}`);
+      }
+    }
   };
 
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) {
-      return <div className="w-4 h-4" />;
-    }
-    return sortDirection === 'asc' ? 
-      <ChevronUp size={16} className="text-[#39FF14]" /> : 
-      <ChevronDown size={16} className="text-[#39FF14]" />;
-  };
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="text-xl text-gray-700">Loading Watchlist...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="text-xl text-red-500">Error: {error}</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-[#2C2C2C] rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between p-4 border-b border-[#383838]">
-        <div className="flex items-center gap-4">
-          <h2 className="text-xl font-bold text-[#F0F0F0]">Watchlist ({stocks.length})</h2>
-          <TagFilter
-            tags={tags}
-            selectedTags={selectedTagFilters}
-            onTagToggle={handleTagToggle}
-            onClearAll={handleClearAllFilters}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          {lastRefresh && (
-            <div className="text-xs text-[#AAAAAA] mr-2">
-              Last updated: {lastRefresh.toLocaleTimeString()}
-            </div>
-          )}
+    <div className="p-6 bg-gray-900 min-h-screen text-white font-inter rounded-lg shadow-lg">
+      <h2 className="text-3xl font-bold mb-6 text-purple-400">My Watchlist</h2>
+
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
+        <input
+          type="text"
+          placeholder="Search stocks..."
+          className="p-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 flex-grow max-w-xs"
+          onChange={handleSearchChange}
+        />
+        <TagFilter allTags={allTags} selectedTags={selectedTags} onTagChange={handleTagChange} />
+        <div className="flex gap-4">
           <button
-            onClick={() => refreshAllStocks()}
-            disabled={isRefreshing || stocks.length === 0}
-            className="flex items-center gap-2 px-3 py-2 bg-[#383838] text-[#AAAAAA] rounded font-medium hover:bg-[#4A4A4A] transition-colors disabled:opacity-50"
+            onClick={() => setIsAddModalOpen(true)}
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
           >
-            <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
-            {isRefreshing ? 'Updating...' : 'Refresh'}
+            Add Stock
           </button>
           <button
             onClick={() => setIsShareModalOpen(true)}
-            disabled={stocks.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-[#BF00FF] text-[#F0F0F0] rounded font-medium hover:bg-[#A000E6] transition-colors disabled:opacity-50"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
           >
-            <Share2 size={16} />
-            Share
+            Share Watchlist
           </button>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#39FF14] text-[#1A1A1A] rounded font-medium hover:bg-[#33E60C] transition-colors"
-          >
-            <Plus size={16} />
-            Add Stock
-          </button>
+          {selectedStockIds.length > 0 && (
+            <button
+              onClick={handleMassDelete}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+            >
+              Delete Selected ({selectedStockIds.length})
+            </button>
+          )}
         </div>
       </div>
-
-      {stocks.length === 0 ? (
-        <div className="p-8 text-center">
-          <div className="text-[#AAAAAA] mb-4">
-            Your watchlist is empty. Add some stocks to get started!
-          </div>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="px-6 py-3 bg-[#39FF14] text-[#1A1A1A] rounded font-medium hover:bg-[#33E60C] transition-colors"
-          >
-            Add Your First Stock
-          </button>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[#383838] bg-[#242424]">
-                <th className="px-4 py-3 text-left">
-                  <button
-                    onClick={() => handleSort('symbol')}
-                    className="flex items-center gap-2 text-[#AAAAAA] hover:text-[#F0F0F0] transition-colors font-medium text-sm"
-                  >
-                    Symbol
-                    <SortIcon field="symbol" />
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('price')}
-                    className="flex items-center gap-2 text-[#AAAAAA] hover:text-[#F0F0F0] transition-colors font-medium text-sm ml-auto"
-                  >
-                    Last Price
-                    <SortIcon field="price" />
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('changePercent')}
-                    className="flex items-center gap-2 text-[#AAAAAA] hover:text-[#F0F0F0] transition-colors font-medium text-sm ml-auto"
-                  >
-                    Change / Pre-Market
-                    <SortIcon field="changePercent" />
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('high')}
-                    className="flex items-center gap-2 text-[#AAAAAA] hover:text-[#F0F0F0] transition-colors font-medium text-sm ml-auto"
-                  >
-                    High
-                    <SortIcon field="high" />
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('low')}
-                    className="flex items-center gap-2 text-[#AAAAAA] hover:text-[#F0F0F0] transition-colors font-medium text-sm ml-auto"
-                  >
-                    Low
-                    <SortIcon field="low" />
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('volume')}
-                    className="flex items-center gap-2 text-[#AAAAAA] hover:text-[#F0F0F0] transition-colors font-medium text-sm ml-auto"
-                  >
-                    Volume
-                    <SortIcon field="volume" />
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-left">
-                  <span className="text-[#AAAAAA] font-medium text-sm">Tags</span>
-                </th>
-                <th className="px-4 py-3 text-left">
-                  <span className="text-[#AAAAAA] font-medium text-sm">Notes</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="group">
-              {sortedStocks.map((stock) => (
-                <WatchlistRow
-                  key={stock.id}
-                  stock={stock}
-                  onUpdateNotes={handleUpdateNotes}
-                  onUpdateTags={handleUpdateTags}
-                  onRemoveStock={handleRemoveStock}
-                  availableTags={tags}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
 
       <AddStockModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onAdd={handleAddStock}
-        availableTags={tags}
+        db={db}
+        userId={userId}
+        appId={__app_id}
       />
-
       <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
-        stocks={stocks}
+        userId={userId}
+        appId={__app_id}
+        db={db}
       />
+
+      <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+        <table className="min-w-full leading-normal">
+          <thead>
+            <tr className="bg-gray-700">
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider rounded-tl-lg">
+                <input
+                  type="checkbox"
+                  onChange={handleSelectAll}
+                  checked={selectedStockIds.length === filteredStocks.length && filteredStocks.length > 0}
+                  className="form-checkbox h-4 w-4 text-purple-600 rounded"
+                />
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Symbol
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Company Name
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Current Price
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Daily Change
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Daily Change %
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Tags
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider rounded-tr-lg">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredStocks.length > 0 ? (
+              filteredStocks.map((stock) => (
+                <WatchlistRow
+                  key={stock.id}
+                  stock={stock}
+                  onDelete={handleDeleteStock}
+                  onSelect={handleRowSelect}
+                  isSelected={selectedStockIds.includes(stock.id)}
+                />
+              ))
+            ) : (
+              <tr>
+                <td colSpan={8} className="text-center py-4 text-gray-400">
+                  No stocks found. Add some to your watchlist!
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 text-gray-400 text-sm">
+        User ID: {userId}
+      </div>
     </div>
   );
-}
+};
+
+export default Watchlist;
+
+// Helper function to initialize Firebase app (moved outside component for clarity)
+const initializeApp = (config: any) => {
+  // Check if Firebase app is already initialized to prevent re-initialization errors
+  if (firebase.apps.length === 0) {
+    return firebase.initializeApp(config);
+  } else {
+    return firebase.app();
+  }
+};
