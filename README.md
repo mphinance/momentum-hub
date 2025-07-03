@@ -79,11 +79,15 @@ npm run preview
 
 ## 🔑 API Configuration
 
-This dashboard uses **Polygon.io** for real-time market data. The API key is currently configured in the source code, but for production use, you should:
+This dashboard uses **Polygon.io** for real-time market data. The API key should be configured using environment variables for security.
 
-1. **Get your API key** from [Polygon.io](https://polygon.io/)
-2. **Update the key** in `src/services/polygonApi.ts`
-3. **For production**: Move the API key to environment variables
+1.  **Get your API key** from [Polygon.io](https://polygon.io/)
+2.  **Create a `.env` file** in the root of your project (for local development):
+    ```
+    VITE_POLYGON_API_KEY=your_polygon_api_key
+    ```
+    *Make sure to add `.env` to your `.gitignore` file.*
+3.  **For production deployments (e.g., Netlify)**: Configure `VITE_POLYGON_API_KEY` directly in your hosting provider's environment settings. Refer to the [Deployment Guide](DEPLOYMENT.md) for more details.
 
 ```typescript
 // In production, use environment variables
