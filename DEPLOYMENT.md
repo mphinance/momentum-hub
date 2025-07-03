@@ -1,3 +1,27 @@
+# 🚀 Deployment Guide - mphinance Dashboard
+
+## 📋 Prerequisites
+
+- Node.js 18 or higher
+- npm or yarn package manager
+- Git for version control
+- GitHub account (for continuous deployment)
+- Netlify account (recommended hosting)
+
+## 🔧 Local Development Setup
+
+### 1. Clone and Install
+```bash
+# Clone the repository
+git clone [https://github.com/yourusername/mphinance-dashboard.git](https://github.com/yourusername/mphinance-dashboard.git)
+cd mphinance-dashboard
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
 ### 2. Environment Configuration
 
 For sensitive data like API keys, use environment variables.
