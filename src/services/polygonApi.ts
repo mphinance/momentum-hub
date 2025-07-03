@@ -1,3 +1,11 @@
+To remove your Polygon API key from the GitHub repository and manage it securely via Netlify, follow these steps. This involves modifying your code to read the API key from environment variables and updating your deployment instructions.
+
+1. Update src/services/polygonApi.ts
+You need to modify the PolygonApiService constructor to retrieve the API key from import.meta.env.VITE_POLYGON_API_KEY, which is how Vite exposes environment variables. This prevents your API key from being hardcoded and pushed to your repository.
+
+TypeScript
+
+// src/services/polygonApi.ts
 export interface PolygonQuote {
   ticker: string;
   name?: string;
@@ -75,18 +83,22 @@ export interface PolygonSearchResult {
 
 class PolygonApiService {
   private baseUrl = 'https://api.polygon.io';
-  private apiKey: string;
+  private apiKey: string | undefined; // Changed type to string | undefined
 
   constructor() {
-    // Use your actual API key
-    this.apiKey = 'fgaR6i2YtuHB6N9IYjejvTgNVpBCpxpy';
-    
-    console.log('Polygon API initialized with key:', this.apiKey ? `${this.apiKey.substring(0, 8)}...` : 'NOT SET');
+    // Get the API key from environment variables (Vite-specific way)
+    this.apiKey = import.meta.env.VITE_POLYGON_API_KEY; //
+
+    if (!this.apiKey) {
+      console.error('VITE_POLYGON_API_KEY is not set. Please ensure it is configured in your .env file or Netlify environment variables.');
+    } else {
+      console.log('Polygon API initialized with key:', `${this.apiKey.substring(0, 8)}...`);
+    }
   }
 
   private async makeRequest(endpoint: string): Promise<any> {
     if (!this.apiKey) {
-      throw new Error('Polygon API key not configured.');
+      throw new Error('Polygon API key not configured. Cannot make request.'); //
     }
 
     const url = `${this.baseUrl}${endpoint}${endpoint.includes('?') ? '&' : '?'}apikey=${this.apiKey}`;
