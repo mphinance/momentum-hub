@@ -1,6 +1,7 @@
+// src/components/SharedWatchlistView.tsx
 import React from 'react';
 import { Eye, Calendar, Tag, ExternalLink } from 'lucide-react';
-import { Stock } from '../types/Stock';
+import { Stock, WatchlistTag } from '../types/Stock';
 import { formatPrice, formatChange, formatPercent, formatVolume } from '../utils/formatters';
 
 interface SharedWatchlistViewProps {
@@ -10,6 +11,7 @@ interface SharedWatchlistViewProps {
     settings: {
       includeNotes: boolean;
       includePrices: boolean;
+      availableTags?: WatchlistTag[]; // Added this to interface
     };
   };
 }
@@ -18,6 +20,11 @@ export default function SharedWatchlistView({ watchlistData }: SharedWatchlistVi
   const { watchlist, timestamp, settings } = watchlistData;
   const shareDate = new Date(timestamp).toLocaleDateString();
   const shareTime = new Date(timestamp).toLocaleTimeString();
+
+  const getTagColor = (tagName: string) => {
+    const tag = settings.availableTags?.find(t => t.name === tagName);
+    return tag?.color || '#AAAAAA'; // Default to a grey color if not found
+  };
 
   return (
     <div className="min-h-screen bg-[#1A1A1A] text-[#F0F0F0]">
@@ -165,7 +172,8 @@ export default function SharedWatchlistView({ watchlistData }: SharedWatchlistVi
                             stock.tags.map((tagName, tagIndex) => (
                               <span
                                 key={tagIndex}
-                                className="px-2 py-1 text-xs rounded text-[#1A1A1A] font-medium bg-[#39FF14]"
+                                className="px-2 py-1 text-xs rounded text-[#1A1A1A] font-medium"
+                                style={{ backgroundColor: getTagColor(tagName) }} // Use the function to get the color
                               >
                                 {tagName}
                               </span>
