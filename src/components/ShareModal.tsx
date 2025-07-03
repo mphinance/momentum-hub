@@ -1,14 +1,16 @@
+// src/components/ShareModal.tsx
 import React, { useState } from 'react';
 import { X, Share2, Copy, Check, Eye, ExternalLink } from 'lucide-react';
-import { Stock } from '../types/Stock';
+import { Stock, WatchlistTag } from '../types/Stock';
 
 interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
   stocks: Stock[];
+  availableTags: WatchlistTag[]; // Added this prop
 }
 
-export default function ShareModal({ isOpen, onClose, stocks }: ShareModalProps) {
+export default function ShareModal({ isOpen, onClose, stocks, availableTags }: ShareModalProps) {
   const [shareUrl, setShareUrl] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -22,6 +24,7 @@ export default function ShareModal({ isOpen, onClose, stocks }: ShareModalProps)
       // Create a shareable data object
       const shareData = {
         watchlist: stocks.map(stock => ({
+          id: stock.id, // Include ID for consistency
           symbol: stock.symbol,
           name: stock.name,
           price: includePrices ? stock.price : undefined,
@@ -39,7 +42,8 @@ export default function ShareModal({ isOpen, onClose, stocks }: ShareModalProps)
         timestamp: new Date().toISOString(),
         settings: {
           includeNotes,
-          includePrices
+          includePrices,
+          availableTags // Include availableTags here
         }
       };
 
