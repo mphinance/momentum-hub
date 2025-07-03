@@ -257,4 +257,67 @@ const Watchlist: React.FC = () => {
         db={db}
       />
 
-      <div className="bg-gray-800 rounded-lg shadow-lg overfl
+      <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+        <table className="min-w-full leading-normal">
+          <thead>
+            <tr className="bg-gray-700">
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider rounded-tl-lg">
+                <input
+                  type="checkbox"
+                  onChange={handleSelectAll}
+                  checked={selectedStockIds.length === filteredStocks.length && filteredStocks.length > 0}
+                  className="form-checkbox h-4 w-4 text-purple-600 rounded"
+                />
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Symbol
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Company Name
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Current Price
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Daily Change
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Daily Change %
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                Tags
+              </th>
+              <th className="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider rounded-tr-lg">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredStocks.length > 0 ? (
+              filteredStocks.map((stock) => (
+                <WatchlistRow
+                  key={stock.id}
+                  stock={stock}
+                  onDelete={handleDeleteStock}
+                  onSelect={handleRowSelect}
+                  isSelected={selectedStockIds.includes(stock.id)}
+                />
+              ))
+            ) : (
+              <tr>
+                <td colSpan={8} className="text-center py-4 text-gray-400">
+                  No stocks found. Add some to your watchlist!
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 text-gray-400 text-sm">
+        User ID: {userId}
+      </div>
+    </div>
+  );
+};
+
+export default Watchlist;
