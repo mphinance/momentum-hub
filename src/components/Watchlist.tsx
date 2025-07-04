@@ -321,3 +321,4 @@ const Watchlist: React.FC = () => {
 };
 
 export default Watchlist;
+}
