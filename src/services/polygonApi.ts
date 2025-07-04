@@ -1,10 +1,3 @@
-To remove your Polygon API key from the GitHub repository and manage it securely via Netlify, follow these steps. This involves modifying your code to read the API key from environment variables and updating your deployment instructions.
-
-1. Update src/services/polygonApi.ts
-You need to modify the PolygonApiService constructor to retrieve the API key from import.meta.env.VITE_POLYGON_API_KEY, which is how Vite exposes environment variables. This prevents your API key from being hardcoded and pushed to your repository.
-
-TypeScript
-
 // src/services/polygonApi.ts
 export interface PolygonQuote {
   ticker: string;
@@ -235,7 +228,7 @@ class PolygonApiService {
         } : undefined,
         last_quote: result.last_quote ? {
           price: (result.last_quote.a + result.last_quote.b) / 2,
-          timestamp: result.last_quote.t
+          timestamp: (result.last_quote.t)
         } : undefined,
         min: result.min ? {
           c: result.min.c,
