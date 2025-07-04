@@ -318,7 +318,4 @@ const Watchlist: React.FC = () => {
       </div>
     </div>
   );
-};
-
-export default Watchlist;
 }
