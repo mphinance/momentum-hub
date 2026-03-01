@@ -1,0 +1,5 @@
+# MomentumHub Task Tracker
+# capture.py uses only the Python standard library (urllib, argparse, json).
+# No external dependencies required.
+#
+# If you add scripts that need extra packages, list them below:
