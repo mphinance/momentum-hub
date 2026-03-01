@@ -1,0 +1,29 @@
+name: Triage & Status Update
+on:
+  push:
+    paths:
+      - 'Gemini.md'
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update Main Status
+        run: |
+          # Extract the latest status/done/next from Gemini.md
+          LATEST_STATUS=$(grep "\[STATUS\]" Gemini.md | tail -1 | sed 's/- \[STATUS\]: //')
+          LATEST_DONE=$(grep "\[DONE\]" Gemini.md | tail -1 | sed 's/- \[DONE\]: //')
+          
+          echo "# Project Status" > STATUS.md
+          echo "Last Updated: $(date)" >> STATUS.md
+          echo "## Current Focus" >> STATUS.md
+          echo "$LATEST_STATUS" >> STATUS.md
+          echo "## Last Milestone" >> STATUS.md
+          echo "$LATEST_DONE" >> STATUS.md
+          
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add STATUS.md
+          git commit -m "Auto-update STATUS.md from Gemini.md" || exit 0
+          git push
