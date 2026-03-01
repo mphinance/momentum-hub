@@ -24,7 +24,12 @@ It'll push it straight to GitHub as an Issue. You're welcome, future-Michael.
 
 Hit **New Issue** on GitHub and pick the **💡 Idea → Task** template. It works for everything: half-baked idea, concrete task, bug, random data dump — no judgment.
 
-## 🗂️ Repo Layout
+## �️ Live Dashboard
+
+**[mphinance.github.io/momentum-hub](https://mphinance.github.io/momentum-hub/)** — see all open issues across every repo, live, in a dark-mode dashboard. Add a GitHub token in the banner for private repos.
+
+
+## �🗂️ Repo Layout
 
 ```
 ├── CLAUDE.md              ← AI instructions (seriously, read it)
