@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MomentumHub — Issue Tracker Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0d1117;
+      --surface:     #161b22;
+      --surface2:    #1e2530;
+      --border:      #30363d;
+      --border2:     #21262d;
+      --text:        #e6edf3;
+      --muted:       #7d8590;
+      --accent:      #58a6ff;
+      --green:       #3fb950;
+      --yellow:      #d29922;
+      --red:         #f85149;
+      --purple:      #a371f7;
+      --orange:      #fb8500;
+      --pill-open:   rgba(63,185,80,0.12);
+      --pill-closed: rgba(248,81,73,0.12);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .logo-icon { font-size: 1.3rem; }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .refresh-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .refresh-btn:hover { background: var(--border); border-color: var(--accent); color: var(--accent); }
+    .refresh-btn.spinning .spin { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .last-updated {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── Token banner ── */
+    #token-banner {
+      background: linear-gradient(90deg, rgba(88,166,255,0.1), rgba(163,113,247,0.1));
+      border-bottom: 1px solid rgba(88,166,255,0.25);
+      padding: 0.7rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-size: 0.83rem;
+    }
+    #token-banner input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      width: 340px;
+    }
+    #token-banner button {
+      background: var(--accent);
+      color: #0d1117;
+      border: none;
+      padding: 0.35rem 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.8rem;
+    }
+    #token-banner.hidden { display: none; }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* ── Stats row ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem 1.4rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      transition: border-color 0.2s;
+    }
+    .stat-card:hover { border-color: var(--accent); }
+    .stat-label{ font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-value{ font-size: 2rem; font-weight: 700; line-height: 1; }
+    .stat-value.green { color: var(--green); }
+    .stat-value.yellow { color: var(--yellow); }
+    .stat-value.red { color: var(--red); }
+    .stat-value.purple { color: var(--purple); }
+
+    /* ── Repo sections ── */
+    .repos-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .repo-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .repo-card:hover { border-color: var(--border2); }
+
+    .repo-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.4rem;
+      border-bottom: 1px solid var(--border2);
+      background: var(--surface2);
+      cursor: pointer;
+      user-select: none;
+    }
+    .repo-header:hover { background: rgba(48,54,61,0.5); }
+
+    .repo-name {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .repo-name a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .repo-name a:hover { text-decoration: underline; }
+    .repo-org { color: var(--muted); font-weight: 400; }
+
+    .repo-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .repo-count {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .chevron {
+      color: var(--muted);
+      transition: transform 0.2s;
+      font-size: 0.7rem;
+    }
+    .repo-card.collapsed .chevron { transform: rotate(-90deg); }
+    .repo-card.collapsed .issues-list { display: none; }
+
+    /* ── Issue list ── */
+    .issues-list { padding: 0; }
+
+    .issue-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.8rem;
+      padding: 0.9rem 1.4rem;
+      border-bottom: 1px solid var(--border2);
+      transition: background 0.12s;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .issue-row:last-child { border-bottom: none; }
+    .issue-row:hover { background: rgba(255,255,255,0.03); }
+
+    .issue-icon {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+    }
+    .issue-icon.open  { color: var(--green); }
+    .issue-icon.closed { color: var(--red); }
+
+    .issue-body { flex: 1; min-width: 0; }
+
+    .issue-title {
+      font-size: 0.88rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 0.25rem;
+    }
+
+    .issue-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      font-size: 0.73rem;
+      color: var(--muted);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.15rem 0.55rem;
+      border-radius: 20px;
+      font-size: 0.68rem;
+      font-weight: 500;
+    }
+    .pill.open   { background: var(--pill-open);   color: var(--green); }
+    .pill.closed { background: var(--pill-closed);  color: var(--red); }
+
+    .label-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.1rem 0.5rem;
+      border-radius: 20px;
+      font-size: 0.65rem;
+      font-weight: 500;
+      border: 1px solid;
+    }
+
+    .issue-number {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* ── Empty / loading states ── */
+    .empty-state {
+      padding: 2.5rem 1.4rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .loading-row {
+      padding: 1rem 1.4rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .skeleton {
+      background: linear-gradient(90deg, var(--surface2) 25%, var(--border2) 50%, var(--surface2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius: 4px;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    /* ── Error state ── */
+    .error-row {
+      padding: 1rem 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--red);
+      font-size: 0.82rem;
+    }
+
+    /* ── Add repo form ── */
+    .add-repo-form {
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 1.2rem 1.4rem;
+      display: flex;
+      gap: 0.8rem;
+      align-items: center;
+    }
+    .add-repo-form input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem 0.9rem;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+    }
+    .add-repo-form input::placeholder { color: var(--muted); }
+    .add-repo-form button {
+      background: var(--accent);
+      color: #0d1117;
+      border: none;
+      padding: 0.5rem 1.1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+    .add-repo-form button:hover { opacity: 0.9; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--muted);
+      font-size: 0.75rem;
+      border-top: 1px solid var(--border2);
+      margin-top: 3rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="#">
+    <span class="logo-icon">📋</span>
+    MomentumHub Dashboard
+  </a>
+  <div class="header-right">
+    <span class="last-updated" id="last-updated">—</span>
+    <button class="refresh-btn" id="refresh-btn" onclick="fetchAll()">
+      <span class="spin">↻</span> Refresh
+    </button>
+  </div>
+</header>
+
+<!-- Token input banner (shown when no token is set) -->
+<div id="token-banner">
+  <span>⚡ Add a GitHub token for private repos + higher rate limits:</span>
+  <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" />
+  <button onclick="saveToken()">Save</button>
+  <button onclick="document.getElementById('token-banner').classList.add('hidden')" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);">Skip</button>
+</div>
+
+<main>
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <span class="stat-label">Open Issues</span>
+      <span class="stat-value green" id="stat-open">—</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Closed Issues</span>
+      <span class="stat-value red" id="stat-closed">—</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Repos Tracked</span>
+      <span class="stat-value purple" id="stat-repos">—</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">High Priority</span>
+      <span class="stat-value yellow" id="stat-priority">—</span>
+    </div>
+  </div>
+
+  <!-- Repo issue lists -->
+  <div class="repos-grid" id="repos-grid"></div>
+
+  <!-- Add repo -->
+  <div class="add-repo-form" style="margin-top:1.5rem;">
+    <input type="text" id="new-repo-input" placeholder="owner/repo (e.g. mphinance/momentum-hub)" />
+    <button onclick="addRepo()">+ Add Repo</button>
+  </div>
+</main>
+
+<footer>
+  MomentumHub Dashboard · GitHub Issues API · Data refreshes every 5 min
+</footer>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+
+const DEFAULT_REPOS = [
+  'mphinance/momentum-hub',
+  'traders-anon/trader-social',
+];
+
+const STORAGE_KEY_REPOS  = 'mh_repos';
+const STORAGE_KEY_TOKEN  = 'mh_github_token';
+const REFRESH_INTERVAL   = 5 * 60 * 1000; // 5 min
+
+// ── State ─────────────────────────────────────────────────────────────────────
+
+function getRepos() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY_REPOS)) || DEFAULT_REPOS; }
+  catch { return DEFAULT_REPOS; }
+}
+function saveRepos(repos) { localStorage.setItem(STORAGE_KEY_REPOS, JSON.stringify(repos)); }
+function getToken() { return localStorage.getItem(STORAGE_KEY_TOKEN) || ''; }
+function saveToken() {
+  const t = document.getElementById('token-input').value.trim();
+  if (!t) return;
+  localStorage.setItem(STORAGE_KEY_TOKEN, t);
+  document.getElementById('token-banner').classList.add('hidden');
+  fetchAll();
+}
+
+// ── GitHub API ────────────────────────────────────────────────────────────────
+
+async function fetchIssues(repo) {
+  const token = getToken();
+  const headers = { 'Accept': 'application/vnd.github+json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const [openRes, closedRes] = await Promise.all([
+    fetch(`https://api.github.com/repos/${repo}/issues?state=open&per_page=25`, { headers }),
+    fetch(`https://api.github.com/repos/${repo}/issues?state=closed&per_page=10`, { headers }),
+  ]);
+
+  if (!openRes.ok) throw new Error(`${openRes.status} ${openRes.statusText}`);
+
+  const open   = await openRes.json();
+  const closed = await closedRes.json();
+
+  // Filter out pull requests (GitHub issues API returns both)
+  const filterPRs = items => items.filter(i => !i.pull_request);
+  return { open: filterPRs(open), closed: filterPRs(closed) };
+}
+
+// ── Rendering ─────────────────────────────────────────────────────────────────
+
+const STATE = {}; // { [repo]: { status, open, closed, error } }
+
+function renderSkeleton(repo) {
+  return `
+    <div class="repo-card" id="card-${cssId(repo)}">
+      <div class="repo-header">
+        <div class="repo-name">📦 <span>${repoDisplay(repo)}</span></div>
+        <div class="repo-meta"><span class="repo-count">Loading…</span><span class="chevron">▾</span></div>
+      </div>
+      <div class="issues-list loading-row">
+        ${[1,2,3].map(i => `<div class="skeleton" style="height:14px;width:${60+i*12}%"></div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function cssId(repo) { return repo.replace(/\//g, '-').replace(/[^a-z0-9-]/gi,''); }
+
+function repoDisplay(repo) {
+  const [org, name] = repo.split('/');
+  return `<span class="repo-org">${org} / </span>${name}`;
+}
+
+function labelStyle(color) {
+  const hex = color.startsWith('#') ? color : `#${color}`;
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  const lum = 0.299*r + 0.587*g + 0.114*b;
+  return `background:${hex}22;color:${hex};border-color:${hex}44`;
+}
+
+function timeAgo(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function renderIssue(issue) {
+  const state = issue.state;
+  const labels = issue.labels || [];
+  const labelHtml = labels.slice(0,3).map(l =>
+    `<span class="label-chip" style="${labelStyle(l.color)}">${l.name}</span>`
+  ).join('');
+
+  const icon = state === 'open'
+    ? `<svg class="issue-icon open" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="7.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="3.5"/></svg>`
+    : `<svg class="issue-icon closed" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 8l2.5 2.5 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+  return `
+    <a class="issue-row" href="${issue.html_url}" target="_blank" rel="noopener">
+      ${icon}
+      <div class="issue-body">
+        <div class="issue-title">${escHtml(issue.title)}</div>
+        <div class="issue-meta">
+          <span class="pill ${state}">${state}</span>
+          ${labelHtml}
+          <span>opened ${timeAgo(issue.created_at)}</span>
+          ${issue.user ? `<span>by ${escHtml(issue.user.login)}</span>` : ''}
+        </div>
+      </div>
+      <span class="issue-number">#${issue.number}</span>
+    </a>`;
+}
+
+function renderCard(repo) {
+  const s = STATE[repo] || {};
+  const id = cssId(repo);
+  const card = document.getElementById(`card-${id}`);
+  if (!card) return;
+
+  const allIssues = [...(s.open||[]), ...(s.closed||[])];
+  const count = s.open ? s.open.length : '?';
+
+  let body;
+  if (s.status === 'loading') {
+    body = `<div class="loading-row">${[1,2].map(i=>`<div class="skeleton" style="height:14px;width:${55+i*15}%"></div>`).join('')}</div>`;
+  } else if (s.status === 'error') {
+    body = `<div class="error-row">⚠ ${escHtml(s.error)} — ${getToken() ? 'Check token permissions.' : 'Repo may be private. Add a GitHub token above.'}</div>`;
+  } else if (!allIssues.length) {
+    body = `<div class="empty-state">🎉 No issues found</div>`;
+  } else {
+    body = allIssues.map(renderIssue).join('');
+  }
+
+  card.innerHTML = `
+    <div class="repo-header" onclick="toggleCard('${id}')">
+      <div class="repo-name">📦 ${repoDisplay(repo)}</div>
+      <div class="repo-meta">
+        <span class="repo-count">${count} open</span>
+        <span class="chevron">▾</span>
+      </div>
+    </div>
+    <div class="issues-list">${body}</div>`;
+}
+
+function toggleCard(id) {
+  document.getElementById(`card-${id}`)?.classList.toggle('collapsed');
+}
+
+function updateStats() {
+  let totalOpen = 0, totalClosed = 0, highPriority = 0;
+  for (const s of Object.values(STATE)) {
+    totalOpen   += (s.open  || []).length;
+    totalClosed += (s.closed|| []).length;
+    highPriority += (s.open || []).filter(i =>
+      (i.labels||[]).some(l => ['priority:high','priority:urgent','urgent','high'].includes(l.name.toLowerCase()))
+    ).length;
+  }
+  document.getElementById('stat-open').textContent    = totalOpen;
+  document.getElementById('stat-closed').textContent  = totalClosed;
+  document.getElementById('stat-repos').textContent   = getRepos().length;
+  document.getElementById('stat-priority').textContent = highPriority || '—';
+  document.getElementById('last-updated').textContent =
+    'Updated ' + new Date().toLocaleTimeString();
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Data fetching ─────────────────────────────────────────────────────────────
+
+async function fetchRepo(repo) {
+  STATE[repo] = { status: 'loading' };
+  renderCard(repo);
+  try {
+    const { open, closed } = await fetchIssues(repo);
+    STATE[repo] = { status: 'ok', open, closed };
+  } catch (e) {
+    STATE[repo] = { status: 'error', error: e.message };
+  }
+  renderCard(repo);
+  updateStats();
+}
+
+async function fetchAll() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  await Promise.all(getRepos().map(fetchRepo));
+  btn.classList.remove('spinning');
+}
+
+function initGrid() {
+  const grid = document.getElementById('repos-grid');
+  const repos = getRepos();
+  grid.innerHTML = repos.map(r =>
+    `<div class="repo-card" id="card-${cssId(r)}"><div class="issues-list loading-row">
+      ${[1,2,3].map(i=>`<div class="skeleton" style="height:14px;width:${50+i*13}%"></div>`).join('')}
+    </div></div>`
+  ).join('');
+}
+
+function addRepo() {
+  const input = document.getElementById('new-repo-input');
+  const val = input.value.trim();
+  if (!val || !val.includes('/')) return;
+  const repos = getRepos();
+  if (repos.includes(val)) return;
+  repos.push(val);
+  saveRepos(repos);
+  input.value = '';
+
+  // Add skeleton card and fetch
+  const grid = document.getElementById('repos-grid');
+  const div = document.createElement('div');
+  div.className = 'repo-card';
+  div.id = `card-${cssId(val)}`;
+  grid.appendChild(div);
+  document.getElementById('stat-repos').textContent = repos.length;
+  fetchRepo(val);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+// Hide token banner if already saved
+if (getToken()) document.getElementById('token-banner').classList.add('hidden');
+
+initGrid();
+fetchAll();
+setInterval(fetchAll, REFRESH_INTERVAL);
+</script>
+</body>
+</html>
